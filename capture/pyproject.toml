@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "capture"
+version = "0.1.0"
+description = "cpture trafic from certain websites"
+authors = ["Your Name <you@example.com>"]
+license = "n"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.10"
+PySide2 = "^5.15.2"
+ifaddr = "^0.1.7"
+requests = "^2.25.1"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
