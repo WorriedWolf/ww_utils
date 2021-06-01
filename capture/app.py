@@ -9,6 +9,7 @@ import ifaddr
 from subprocess import Popen, PIPE
 from zipfile import ZipFile
 import pickle
+import qdarkstyle
 import json
 
 
@@ -36,6 +37,8 @@ class RegisterForm(QDialog):
 
         username_label = QLabel("Username")
         description_label = QLabel("Desciption")
+        self.messge_label = QLabel("")
+        self.messge_label.setVisible(False)
         self.username_edit = QLineEdit("")
         username_layout.addWidget(username_label)
         username_layout.addWidget(self.username_edit)
@@ -51,6 +54,7 @@ class RegisterForm(QDialog):
         layout.addLayout(username_layout)
         layout.addLayout(description_layout)
         layout.addLayout(button_layout)
+        layout.addWidget(self.messge_label)
         self.setLayout(layout)
         self.submit_button.clicked.connect(self.submit)
 
@@ -58,11 +62,12 @@ class RegisterForm(QDialog):
         self.req["machine_name"] = socket.gethostname()
         self.req["username"] = self.username_edit.text()
         self.req["description"] = self.description_edit.text()
-        res = requests.post("https://worriedwolf.com/api/register", data =self.req)
-        if res != 200:
+        res = requests.post("https://worriedwolf.com/api/register", data = json.dumps(self.req))
+        if res.status_code != 200:
             print("error while trying to resgister")
-            print(res)
-            print(self.req)
+            print(res.json())
+            self.messge_label.setText("Something went wrong with registration. Please check logs")
+            self.messge_label.setVisible(True)
             return
         self.req["uid"] = res.text
         with open(sniff_resources["METADATA"], 'wb') as fp:
@@ -79,9 +84,11 @@ class SniffForm(QWidget):
         self.websites = requests.get('https://worriedwolf.com/api/websites').json()
         self.actions = requests.get('https://worriedwolf.com/api/actions').json()
         self.sniff_process = None
-        os.environ["SSLKEYLOGFILE"] = sniff_resources["SSLKEYLOGFILE"]
-        self.archive = False
         self.req = {}
+        os.environ["SSLKEYLOGFILE"] = sniff_resources["SSLKEYLOGFILE"]
+        self.req["external_ipv4"] =requests.get('https://checkip.amazonaws.com').text.strip()
+        self.archive = False
+        
         if parent:
             self.req["machine_id_str"] = parent.req["uid"]
 
@@ -144,7 +151,7 @@ class SniffForm(QWidget):
         return addresses
 
     def start_sniff(self):
-        start_sniff_cmd = "exec tshark poetry run python -w {0}".format(sniff_resources["CAPTUREFILE"]).encode()
+        start_sniff_cmd = "exec tshark -w {0}".format(sniff_resources["CAPTUREFILE"]).encode()
         open_browser_cmd = b"google-chrome  " + self.websites[self.website_edit.currentIndex()]["domain"].encode()
         print(open_browser_cmd)
         self.sniff_process =  Popen(start_sniff_cmd, shell=True)
@@ -160,20 +167,22 @@ class SniffForm(QWidget):
     def send_sniff(self):
         self.req["website_id"] = self.find_website_id()
         self.req["action"] = self.action_edit.currentText()
-        self.req["external_ipv4"] =requests.get('https://checkip.amazonaws.com').text.strip()
-        self.req["keylog"] = open(sniff_resources["SSLKEYLOGFILE"], "rb")
-        self.req["capture"] = open( sniff_resources["CAPTUREFILE"], "rb")
         self.req["internal_ipv4s_str"] = self.get_ip_addresses()
-        res = requests.post("https://worriedwolf.com/api/report", data=self.req)
+        files = {}
+        files["keylog"] = open(sniff_resources["SSLKEYLOGFILE"], "rb")
+        files["capture"] = open( sniff_resources["CAPTUREFILE"], "rb")
+        
+        res = requests.post("https://worriedwolf.com/api/report", data=self.req, files=files)
         if res.status_code != 200:
             print("error sending report")
-            print(res)
+            print(res.json())
+        print(json.dumps(self.req))
         self.clean_up()
         
 
     def find_website_id(self):
         for website in self.websites:
-            if website["name"] == self.website_edit.currentIndex():
+            if website["name"] == self.website_edit.currentText():
                 return website["id"]
 
     def clean_up(self):
@@ -192,7 +201,7 @@ class CaptureWindow(QWidget):
     def __init__(self):
         super(CaptureWindow, self).__init__()
         layout = QVBoxLayout()
-        self.req = {}
+        self.req = {"uid": "", "username": None}
         self.setup()
         uid_label = QLabel(self.req["uid"])
         username_label = QLabel(self.req["username"])
@@ -208,7 +217,9 @@ class CaptureWindow(QWidget):
                 self.req = pickle.load(config)
         else:
             register = RegisterForm(self)
-            register.show()
+            register.exec_()
+        print(self.req)
+        self.req["uid"] = self.req["uid"].strip('\"')
         
     def destroy_sniff(self):
         self.sniff_widget.close()
@@ -218,6 +229,7 @@ class CaptureWindow(QWidget):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside2'))
     form = CaptureWindow()
     form.show()
     sys.exit(app.exec_())

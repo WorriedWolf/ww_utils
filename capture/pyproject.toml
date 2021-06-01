@@ -10,6 +10,7 @@ python = ">=3.8,<3.10"
 PySide2 = "^5.15.2"
 ifaddr = "^0.1.7"
 requests = "^2.25.1"
+QDarkStyle = "^3.0.2"
 
 [tool.poetry.dev-dependencies]
 
