@@ -18,7 +18,8 @@ WORKINGDIR = os.path.dirname(os.path.realpath(__file__))
 sniff_resources = {
     "SSLKEYLOGFILE" : os.path.join(WORKINGDIR, "eavesdrop.keylog"),
     "CAPTUREFILE"  : os.path.join(WORKINGDIR,"capture.pcap") ,
-    "METADATA" : os.path.join(WORKINGDIR,".eavesdrop")
+    "METADATA" : os.path.join(WORKINGDIR,".eavesdrop"),
+    "URL" : "https://worriedwolf.com/api"
 }
 
 
@@ -57,12 +58,13 @@ class RegisterForm(QDialog):
         layout.addWidget(self.messge_label)
         self.setLayout(layout)
         self.submit_button.clicked.connect(self.submit)
+        self.cancel_button.clicked.connect(self.close)
 
     def submit(self):
         self.req["machine_name"] = socket.gethostname()
         self.req["username"] = self.username_edit.text()
         self.req["description"] = self.description_edit.text()
-        res = requests.post("https://worriedwolf.com/api/register", data = json.dumps(self.req))
+        res = requests.post(f'{sniff_resources["URL"]}/register', data = json.dumps(self.req))
         if res.status_code != 200:
             print("error while trying to resgister")
             print(res.json())
@@ -75,14 +77,13 @@ class RegisterForm(QDialog):
         self.parent.req = self.req
         self.close()
 
-        
 
 class SniffForm(QWidget):
     def __init__(self, parent=None):
         super(SniffForm, self).__init__(parent)
         self.setWindowTitle("Sniff Form")
-        self.websites = requests.get('https://worriedwolf.com/api/websites').json()
-        self.actions = requests.get('https://worriedwolf.com/api/actions').json()
+        self.websites = requests.get(f'{sniff_resources["URL"]}/websites').json()
+        self.actions = requests.get(f'{sniff_resources["URL"]}/actions').json()
         self.sniff_process = None
         self.req = {}
         os.environ["SSLKEYLOGFILE"] = sniff_resources["SSLKEYLOGFILE"]
@@ -152,7 +153,7 @@ class SniffForm(QWidget):
 
     def start_sniff(self):
         start_sniff_cmd = "exec tshark -w {0}".format(sniff_resources["CAPTUREFILE"]).encode()
-        open_browser_cmd = b"google-chrome  " + self.websites[self.website_edit.currentIndex()]["domain"].encode()
+        open_browser_cmd = b"google-chrome " + self.websites[self.website_edit.currentIndex()]["domain"].encode()
         print(open_browser_cmd)
         self.sniff_process =  Popen(start_sniff_cmd, shell=True)
         Popen(open_browser_cmd, shell=True)
@@ -172,7 +173,7 @@ class SniffForm(QWidget):
         files["keylog"] = open(sniff_resources["SSLKEYLOGFILE"], "rb")
         files["capture"] = open( sniff_resources["CAPTUREFILE"], "rb")
         
-        res = requests.post("https://worriedwolf.com/api/report", data=self.req, files=files)
+        res = requests.post(f'{sniff_resources["URL"]}/report', data=self.req, files=files)
         if res.status_code != 200:
             print("error sending report")
             print(res.json())
@@ -201,14 +202,17 @@ class CaptureWindow(QWidget):
     def __init__(self):
         super(CaptureWindow, self).__init__()
         layout = QVBoxLayout()
-        self.req = {"uid": "", "username": None}
+        self.valid = None
+        self.req = None
         self.setup()
         uid_label = QLabel(self.req["uid"])
         username_label = QLabel(self.req["username"])
-        self.sniff_widget = SniffForm(self)
+
         layout.addWidget(uid_label)
         layout.addWidget(username_label)
-        layout.addWidget(self.sniff_widget)
+        if self.valid:
+            self.sniff_widget = SniffForm(self)
+            layout.addWidget(self.sniff_widget)
         self.setLayout(layout)
 
     def setup(self):
@@ -218,7 +222,17 @@ class CaptureWindow(QWidget):
         else:
             register = RegisterForm(self)
             register.exec_()
-        print(self.req)
+            if (self.req == None):
+                self.req = {}
+                self.req["uid"] = "No credentials given"
+                self.req["username"] = "Please contact a WorriedWolf admin :)"
+                self.valid = False
+                return
+        self.valid = True
+        if os.path.exists(sniff_resources["SSLKEYLOGFILE"]):
+                os.remove(sniff_resources["SSLKEYLOGFILE"])
+        if os.path.exists(sniff_resources["CAPTUREFILE"]):
+            os.remove(sniff_resources["CAPTUREFILE"])
         self.req["uid"] = self.req["uid"].strip('\"')
         
     def destroy_sniff(self):
