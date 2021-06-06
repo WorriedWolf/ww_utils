@@ -10,7 +10,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -131,3 +130,6 @@ dmypy.json
 *keylog*
 *pcap
 .eavesdrop*
+
+ww-capture-agent.deb
+/build-nix-agent/dist/opt/ww-capture-agent/app.py

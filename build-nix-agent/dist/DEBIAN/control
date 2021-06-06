@@ -1,0 +1,9 @@
+Package: ww-capture-agent
+Version: 0.1
+Section: custom
+Priority: optional
+Architecture: amd64
+Essential: no
+Installed-Size: 1024
+Maintainer: worriedwolf.com
+Description: Capture and submit packet data and TLS session keys for research analysis
