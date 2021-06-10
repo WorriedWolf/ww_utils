@@ -1,6 +1,7 @@
 import sys
 from PySide2.QtWidgets import (QDialog, QLineEdit, QPushButton, QApplication,
                                QVBoxLayout, QHBoxLayout, QMainWindow, QLabel, QComboBox, QWidget)
+from PySide2.QtCore import(QTimer)
 import socket
 import requests
 import signal
@@ -11,6 +12,7 @@ from zipfile import ZipFile
 import pickle
 import qdarkstyle
 import json
+import sched
 
 WORKINGDIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -87,10 +89,14 @@ class SniffForm(QWidget):
         self.req = {}
         os.environ["SSLKEYLOGFILE"] = sniff_resources["SSLKEYLOGFILE"]
         self.req["external_ipv4"] = requests.get('https://checkip.amazonaws.com').text.strip()
+        self.sniff_duration = sniff_resources["SETTINGS"]["recording_timeout"]
         self.archive = False
 
         if parent:
             self.req["machine_id_str"] = parent.req["uid"]
+
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
 
         layout = QVBoxLayout()
         button_layout = QHBoxLayout()
@@ -149,12 +155,13 @@ class SniffForm(QWidget):
         return addresses
 
     def start_sniff(self):
-        start_sniff_cmd = "exec tshark -w {0}".format(sniff_resources["CAPTUREFILE"]).encode()
+        start_sniff_cmd = f'exec tshark -w {sniff_resources["CAPTUREFILE"]} -a duration:{self.sniff_duration}'
         open_browser_cmd = b"google-chrome " + self.websites[self.website_edit.currentIndex()]["domain"].encode()
-        print(open_browser_cmd)
         self.sniff_process = Popen(start_sniff_cmd, shell=True)
         Popen(open_browser_cmd, shell=True)
+        self.timer.singleShot(self.sniff_duration * 1000, self.stop_sniff)
         self.status_label.setText("Sniffing")
+    
 
     def stop_sniff(self):
         if self.sniff_process:
@@ -199,6 +206,8 @@ class CaptureWindow(QWidget):
         layout = QVBoxLayout()
         self.valid = None
         self.req = None
+        sniff_resources["SETTINGS"] = requests.get(f'{sniff_resources["URL"]}/settings').json()
+        print(sniff_resources)
         self.setup()
         uid_label = QLabel(self.req["uid"])
         username_label = QLabel(self.req["username"])
@@ -224,6 +233,7 @@ class CaptureWindow(QWidget):
                 self.valid = False
                 return
         self.valid = True
+     
         if os.path.exists(sniff_resources["SSLKEYLOGFILE"]):
             os.remove(sniff_resources["SSLKEYLOGFILE"])
         if os.path.exists(sniff_resources["CAPTUREFILE"]):
