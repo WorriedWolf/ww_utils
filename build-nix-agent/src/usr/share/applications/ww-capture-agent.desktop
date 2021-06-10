@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=WW Capture Agent
+GenericName=Network Security Research
+Comment=Network Security Research using packet capture and TLS decryption
+Exec=/opt/ww-capture-agent/app
+Terminal=false
+Icon=wolf
+Type=Application
+Version=1.0
+Categories=Development;

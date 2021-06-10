@@ -11,21 +11,26 @@ from zipfile import ZipFile
 import pickle
 import qdarkstyle
 import json
+from appdirs import user_data_dir
 
-WORKINGDIR = os.path.dirname(os.path.realpath(__file__))
+USER_DATA_DIR = user_data_dir("ww-capture-agent", "WorriedWolf")
+if not os.path.exists(USER_DATA_DIR):
+    os.makedirs(USER_DATA_DIR)
+# this variable can be set to, for instance, "qa."
+SECONDARY_SERVER = os.getenv("SECONDARY_SERVER", "")
 
 sniff_resources = {
-    "SSLKEYLOGFILE": os.path.join(WORKINGDIR, "eavesdrop.keylog"),
-    "CAPTUREFILE": os.path.join(WORKINGDIR, "capture.pcap"),
-    "METADATA": os.path.join(WORKINGDIR, ".eavesdrop"),
-    "URL": "https://worriedwolf.com/api"
+    "SSLKEYLOGFILE": os.path.join(USER_DATA_DIR, "eavesdrop.keylog"),
+    "CAPTUREFILE": os.path.join(USER_DATA_DIR, "capture.pcap"),
+    "METADATA": os.path.join(USER_DATA_DIR, f".{SECONDARY_SERVER}eavesdrop"),
+    "URL": f"https://{SECONDARY_SERVER}worriedwolf.com/api"
 }
 
 
 class RegisterForm(QDialog):
     def __init__(self, parent=None):
         super(RegisterForm, self).__init__(parent)
-        self.setWindowTitle("Register")
+        self.setWindowTitle(f"{SECONDARY_SERVER}Register")
         self.parent = parent
         self.req = {}
         layout = QVBoxLayout()
@@ -80,7 +85,7 @@ class RegisterForm(QDialog):
 class SniffForm(QWidget):
     def __init__(self, parent=None):
         super(SniffForm, self).__init__(parent)
-        self.setWindowTitle("Sniff Form")
+        self.setWindowTitle(f"{SECONDARY_SERVER}Sniff Form")
         self.websites = requests.get(f'{sniff_resources["URL"]}/websites').json()
         self.actions = requests.get(f'{sniff_resources["URL"]}/actions').json()
         self.sniff_process = None
@@ -196,6 +201,7 @@ class SniffForm(QWidget):
 class CaptureWindow(QWidget):
     def __init__(self):
         super(CaptureWindow, self).__init__()
+        self.setWindowTitle(f"{SECONDARY_SERVER}Capture")
         layout = QVBoxLayout()
         self.valid = None
         self.req = None
