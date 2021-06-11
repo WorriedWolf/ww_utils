@@ -6,7 +6,7 @@ import requests
 import signal
 import os
 import ifaddr
-from subprocess import Popen, PIPE
+from subprocess import Popen, call
 from zipfile import ZipFile
 import pickle
 import qdarkstyle
@@ -18,6 +18,8 @@ if not os.path.exists(USER_DATA_DIR):
     os.makedirs(USER_DATA_DIR)
 # this variable can be set to, for instance, "qa."
 SECONDARY_SERVER = os.getenv("SECONDARY_SERVER", "")
+CHROME_CMD = "google-chrome" if os.name == "posix" else "start chrome"
+TSHARK_CMD = "exec tshark" if os.name == "posix" else "C:/Program Files/Wireshark/tshark.exe"
 
 sniff_resources = {
     "SSLKEYLOGFILE": os.path.join(USER_DATA_DIR, "eavesdrop.keylog"),
@@ -154,8 +156,8 @@ class SniffForm(QWidget):
         return addresses
 
     def start_sniff(self):
-        start_sniff_cmd = "exec tshark -w {0}".format(sniff_resources["CAPTUREFILE"]).encode()
-        open_browser_cmd = b"google-chrome " + self.websites[self.website_edit.currentIndex()]["domain"].encode()
+        start_sniff_cmd = [TSHARK_CMD, "-w", sniff_resources['CAPTUREFILE']]
+        open_browser_cmd = f"{CHROME_CMD} {self.websites[self.website_edit.currentIndex()]['domain']}"
         print(open_browser_cmd)
         self.sniff_process = Popen(start_sniff_cmd, shell=True)
         Popen(open_browser_cmd, shell=True)
@@ -163,7 +165,10 @@ class SniffForm(QWidget):
 
     def stop_sniff(self):
         if self.sniff_process:
-            self.sniff_process.kill()
+            if os.name == 'posix':
+                self.sniff_process.kill()
+            else:
+                call(['taskkill', '/F', '/T', '/PID', str(self.sniff_process.pid)])
         self.submit_widget.setVisible(True)
         self.status_label.setText("Stopped and staged")
 
@@ -192,7 +197,6 @@ class SniffForm(QWidget):
             with ZipFile('sample2.zip', 'w') as archive:
                 archive.write(sniff_resources["SSLKEYLOGFILE"])
                 archive.write(sniff_resources["CAPTUREFILE"])
-        os.remove(sniff_resources["SSLKEYLOGFILE"])
         os.remove(sniff_resources["CAPTUREFILE"])
         self.submit_widget.setVisible(False)
         self.status_label.setText("ready")
@@ -230,8 +234,6 @@ class CaptureWindow(QWidget):
                 self.valid = False
                 return
         self.valid = True
-        if os.path.exists(sniff_resources["SSLKEYLOGFILE"]):
-            os.remove(sniff_resources["SSLKEYLOGFILE"])
         if os.path.exists(sniff_resources["CAPTUREFILE"]):
             os.remove(sniff_resources["CAPTUREFILE"])
         self.req["uid"] = self.req["uid"].strip('\"')
