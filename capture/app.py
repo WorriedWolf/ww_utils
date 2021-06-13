@@ -1,7 +1,7 @@
 import sys
 from PySide2.QtWidgets import (QDialog, QLineEdit, QPushButton, QApplication,
-                               QVBoxLayout, QHBoxLayout, QMessageBox, QLabel, QComboBox, QWidget)
-from PySide2.QtCore import(QTimer)
+                               QVBoxLayout, QHBoxLayout, QMessageBox, QLabel, QComboBox, QWidget, QLCDNumber)
+from PySide2.QtCore import(QTimer, SIGNAL)
 import socket
 import requests
 import signal
@@ -30,6 +30,30 @@ sniff_resources = {
     "URL": f"https://{SECONDARY_SERVER}worriedwolf.com/api"
 }
 
+class DigitalClock(QLCDNumber):
+    def __init__(self,seconds, parent = None):
+        super(DigitalClock, self).__init__(parent)
+        self.setSegmentStyle(QLCDNumber.Filled)
+        self.timer = QTimer(self)
+        self.seconds = seconds
+        self.remaining_seconds = seconds
+        self.connect(self.timer, SIGNAL('timeout()'), self.showTime)
+        self.showTime()
+        self.setMinimumHeight(100)
+
+
+    def showTime(self):
+        if self.remaining_seconds >-1:
+            text = str(self.remaining_seconds)
+            self.remaining_seconds -= 1
+            self.display(text)
+        else:
+            self.reset()
+
+    def reset(self):
+            self.remaining_seconds = self.seconds
+            self.timer.stop()
+            self.showTime()
 
 class RegisterForm(QDialog):
     def __init__(self, parent=None):
@@ -111,6 +135,7 @@ class SniffForm(QWidget):
         self.end_button = QPushButton("End Sniff")
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.end_button)
+        
         self.start_button.clicked.connect(self.start_sniff)
         self.end_button.clicked.connect(self.stop_sniff)
 
@@ -145,8 +170,16 @@ class SniffForm(QWidget):
 
         self.submit_widget.setLayout(self.submit_layout)
         self.submit_widget.setVisible(False)
+
+        countdown_layout = QHBoxLayout()
+        countdown_label = QLabel("Sniff Countdown")
+        self.countdown = DigitalClock(self.sniff_duration)
+        countdown_layout.addWidget(countdown_label)
+        countdown_layout.addWidget(self.countdown)
+
         layout.addLayout(website_layout)
         layout.addLayout(action_layout)
+        layout.addLayout(countdown_layout)
         layout.addLayout(button_layout)
         layout.addWidget(self.status_label)
         layout.addWidget(self.submit_widget)
@@ -168,7 +201,7 @@ class SniffForm(QWidget):
             else:
                 self.start_sniff_win()
             self.timer.singleShot(self.sniff_duration * 1000, self.stop_sniff)
-            self.status_label.setText("Sniffing")
+            self.countdown.timer.start(1000)
         except Exception as e:
             self.raise_user_error("start sniff failed", traceback.format_exc())
             
@@ -196,6 +229,7 @@ class SniffForm(QWidget):
     
 
     def stop_sniff(self):
+        self.countdown.timer.stop()
         if self.sniff_process:
             try:
                 os.kill(self.sniff_process.pid, SIGTERM)
@@ -234,6 +268,7 @@ class SniffForm(QWidget):
         except Exception as e:
             self.raise_user_error("clean up failed!", traceback.format_exc())
         self.submit_widget.setVisible(False)
+        self.countdown.reset()
         self.status_label.setText("ready")
 
 
@@ -245,7 +280,7 @@ class CaptureWindow(QWidget):
         self.valid = None
         self.req = None
         reply = self.kill_chrome()
-        if reply ==True:
+        if reply == True:
             self.setup()
             uid_label = QLabel(self.req["uid"])
             username_label = QLabel(self.req["username"])
@@ -289,6 +324,7 @@ class CaptureWindow(QWidget):
             msgbox.setText("Cannot continue without shutting down chrome... exiting")
             msgbox.setWindowTitle("Error")
             msgbox.exec_()
+        return reply
             
 
 
@@ -316,6 +352,7 @@ class CaptureWindow(QWidget):
             os.remove(sniff_resources["CAPTUREFILE"])
 
     def closeEvent(self, event):
+        os.environ["SSLKEYLOGFILE"] = ""
         if self.sniff_widget:
             self.sniff_widget.stop_sniff()
             self.kill_chrome()

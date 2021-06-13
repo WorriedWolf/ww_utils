@@ -14,7 +14,7 @@ If you have any questions please contact us at: SOMEEMAIIL@ADDRESS
 
 Before you start the program, it's best to make sure chrome is shut down and that there are no on-going tshark sniffing processes.
 
-When starting the program, this is the first message you will see. This is your opportunity to shut down Chrome. If not, we will kill it.
+When starting the program, this is the first message you will see. This is your opportunity to shut down Chrome. If not, we will kill it. This modal will appear whenever it is appropriate.
 
 ![close_chrome](/home/v/Projects/ww_utils/capture/docs/images/close_chrome.png)
 
