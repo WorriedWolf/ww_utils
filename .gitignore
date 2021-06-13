@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+capture/dist
 develop-eggs/
 downloads/
 eggs/
@@ -132,4 +133,4 @@ dmypy.json
 .eavesdrop*
 
 ww-capture-agent.deb
-/build-nix-agent/dist/opt/ww-capture-agent/app.py
+/build-nix-agent/src/opt/ww-capture-agent/app

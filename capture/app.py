@@ -1,33 +1,40 @@
 import sys
 from PySide2.QtWidgets import (QDialog, QLineEdit, QPushButton, QApplication,
-                               QVBoxLayout, QHBoxLayout, QMainWindow, QLabel, QComboBox, QWidget)
+                               QVBoxLayout, QHBoxLayout, QMessageBox, QLabel, QComboBox, QWidget)
 from PySide2.QtCore import(QTimer)
 import socket
 import requests
 import signal
 import os
 import ifaddr
+import traceback
 from subprocess import Popen, PIPE
 from zipfile import ZipFile
 import pickle
 import qdarkstyle
 import json
-import sched
+from signal import SIGTERM
+from appdirs import user_data_dir
 
-WORKINGDIR = os.path.dirname(os.path.realpath(__file__))
+USER_DATA_DIR = user_data_dir("ww-capture-agent", "WorriedWolf")
+if not os.path.exists(USER_DATA_DIR):
+    os.makedirs(USER_DATA_DIR)
+print(USER_DATA_DIR)
+# this variable can be set to, for instance, "qa."
+SECONDARY_SERVER = os.getenv("SECONDARY_SERVER", "")
 
 sniff_resources = {
-    "SSLKEYLOGFILE": os.path.join(WORKINGDIR, "eavesdrop.keylog"),
-    "CAPTUREFILE": os.path.join(WORKINGDIR, "capture.pcap"),
-    "METADATA": os.path.join(WORKINGDIR, ".eavesdrop"),
-    "URL": "https://worriedwolf.com/api"
+    "SSLKEYLOGFILE": os.path.join(USER_DATA_DIR, "eavesdrop.keylog"),
+    "CAPTUREFILE": os.path.join(USER_DATA_DIR, "capture.pcap"),
+    "METADATA": os.path.join(USER_DATA_DIR, f".{SECONDARY_SERVER}eavesdrop"),
+    "URL": f"https://{SECONDARY_SERVER}worriedwolf.com/api"
 }
 
 
 class RegisterForm(QDialog):
     def __init__(self, parent=None):
         super(RegisterForm, self).__init__(parent)
-        self.setWindowTitle("Register")
+        self.setWindowTitle(f"{SECONDARY_SERVER}Register")
         self.parent = parent
         self.req = {}
         layout = QVBoxLayout()
@@ -82,7 +89,7 @@ class RegisterForm(QDialog):
 class SniffForm(QWidget):
     def __init__(self, parent=None):
         super(SniffForm, self).__init__(parent)
-        self.setWindowTitle("Sniff Form")
+        self.setWindowTitle(f"{SECONDARY_SERVER}Sniff Form")
         self.websites = requests.get(f'{sniff_resources["URL"]}/websites').json()
         self.actions = requests.get(f'{sniff_resources["URL"]}/actions').json()
         self.sniff_process = None
@@ -91,7 +98,7 @@ class SniffForm(QWidget):
         self.req["external_ipv4"] = requests.get('https://checkip.amazonaws.com').text.strip()
         self.sniff_duration = sniff_resources["SETTINGS"]["recording_timeout"]
         self.archive = False
-
+        self.sniff_duration = sniff_resources["SETTINGS"]["recording_timeout"]
         if parent:
             self.req["machine_id_str"] = parent.req["uid"]
 
@@ -155,19 +162,50 @@ class SniffForm(QWidget):
         return addresses
 
     def start_sniff(self):
-        start_sniff_cmd = f'exec tshark -w {sniff_resources["CAPTUREFILE"]} -a duration:{self.sniff_duration}'
+        try:
+            if  os.name == "posix":
+                self.start_sniff_unix()
+            else:
+                self.start_sniff_win()
+        except Exception as e:
+            self.raise_user_error("start sniff failed", traceback.format_exc())
+            
+    def raise_user_error(self, message, e):
+        msgbox = QMessageBox()
+        msgbox.setIcon(QMessageBox.Critical)
+        msgbox.setText(message)
+        msgbox.setInformativeText(e + "\n\n")
+        msgbox.setWindowTitle("Error")
+        msgbox.exec_()
+
+
+    def start_sniff_unix(self):
+        start_sniff_cmd = f'exec tshark -w {sniff_resources["CAPTUREFILE"]}'
         open_browser_cmd = b"google-chrome " + self.websites[self.website_edit.currentIndex()]["domain"].encode()
         self.sniff_process = Popen(start_sniff_cmd, shell=True)
+        self.timer.singleShot(self.sniff_duration * 1000, self.stop_sniff)
+        Popen(open_browser_cmd, shell=True)
+        self.status_label.setText("Sniffing")
+
+    def start_sniff_win(self):
+        start_sniff_cmd =  ["C:/Program Files/Wireshark/tshark.exe", "-w", sniff_resources['CAPTUREFILE']]
+        open_browser_cmd = str("start chrome " + self.websites[self.website_edit.currentIndex()]["domain"])
+        self.sniff_process = Popen(start_sniff_cmd, shell=False)
+        self.timer.singleShot(self.sniff_duration * 1000, self.stop_sniff)
         Popen(open_browser_cmd, shell=True)
         self.timer.singleShot(self.sniff_duration * 1000, self.stop_sniff)
         self.status_label.setText("Sniffing")
     
 
     def stop_sniff(self):
-        if self.sniff_process:
-            self.sniff_process.kill()
-        self.submit_widget.setVisible(True)
-        self.status_label.setText("Stopped and staged")
+        try:
+            if self.sniff_process:
+                os.kill(self.sniff_process.pid, SIGTERM)
+                self.sniff_process.kill()
+            self.submit_widget.setVisible(True)
+            self.status_label.setText("Stopped and staged")
+        except Exception as e:
+            self.raise_user_error("stop sniff failed", traceback.format_exc())
 
     def send_sniff(self):
         self.req["website_id"] = self.find_website_id()
@@ -179,9 +217,7 @@ class SniffForm(QWidget):
 
         res = requests.post(f'{sniff_resources["URL"]}/report', data=self.req, files=files)
         if res.status_code != 200:
-            print("error sending report")
-            print(res.json())
-        print(json.dumps(self.req))
+            self.raise_user_error("Error sending sniff to remote", str(res.status_code))
         self.clean_up()
 
     def find_website_id(self):
@@ -190,34 +226,64 @@ class SniffForm(QWidget):
                 return website["id"]
 
     def clean_up(self):
-        if self.archive:
-            with ZipFile('sample2.zip', 'w') as archive:
-                archive.write(sniff_resources["SSLKEYLOGFILE"])
-                archive.write(sniff_resources["CAPTUREFILE"])
-        os.remove(sniff_resources["SSLKEYLOGFILE"])
-        os.remove(sniff_resources["CAPTUREFILE"])
-        self.submit_widget.setVisible(False)
-        self.status_label.setText("ready")
+        try:
+            if self.archive:
+                with ZipFile('sample2.zip', 'w') as archive:
+                    archive.write(sniff_resources["SSLKEYLOGFILE"])
+                    archive.write(sniff_resources["CAPTUREFILE"])
+            os.remove(sniff_resources["CAPTUREFILE"])
+            self.submit_widget.setVisible(False)
+            self.status_label.setText("ready")
+        except Exception as e:
+            self.raise_user_error("clean up failed!", traceback.format_exc())
 
 
 class CaptureWindow(QWidget):
     def __init__(self):
         super(CaptureWindow, self).__init__()
+        self.setWindowTitle(f"{SECONDARY_SERVER}Capture")
         layout = QVBoxLayout()
         self.valid = None
         self.req = None
-        sniff_resources["SETTINGS"] = requests.get(f'{sniff_resources["URL"]}/settings').json()
-        print(sniff_resources)
+        self.kill_chrome()
         self.setup()
         uid_label = QLabel(self.req["uid"])
         username_label = QLabel(self.req["username"])
 
+        sniff_resources["SETTINGS"] = requests.get(f'{sniff_resources["URL"]}/settings').json()
         layout.addWidget(uid_label)
         layout.addWidget(username_label)
         if self.valid:
             self.sniff_widget = SniffForm(self)
             layout.addWidget(self.sniff_widget)
         self.setLayout(layout)
+
+    def quit_chrome_message(self):
+        msgbox = QMessageBox(QMessageBox.Question, "Can we shut down chrome?", "We will kill all chrome processes before we continue. ")
+        msgbox.addButton(QMessageBox.Yes)
+        msgbox.addButton(QMessageBox.No)
+        msgbox.setDefaultButton(QMessageBox.No)
+        reply = msgbox.exec()
+        if reply == QMessageBox.Yes:
+                return True
+        return False
+
+    def kill_chrome(self):
+        reply = self.quit_chrome_message()
+        if reply == True:
+            if os.name == "posix":
+                proc = Popen("pkill -9 chrome", shell=True)
+            else:
+                proc = Popen("taskkill /F /IM chrome.exe")
+            proc.wait()
+            return
+        else:
+            msgbox = QMessageBox()
+            msgbox.setIcon(QMessageBox.Critical)
+            msgbox.setText("Cannot continue without shutting down chrome... exiting")
+            msgbox.setWindowTitle("Error")
+            msgbox.exec_()
+            self.close()
 
     def setup(self):
         if os.path.exists(sniff_resources["METADATA"]):
@@ -233,16 +299,20 @@ class CaptureWindow(QWidget):
                 self.valid = False
                 return
         self.valid = True
-     
+        self.clean_up()
+        self.req["uid"] = self.req["uid"].strip('\"')
+
+    def clean_up(self):
         if os.path.exists(sniff_resources["SSLKEYLOGFILE"]):
             os.remove(sniff_resources["SSLKEYLOGFILE"])
         if os.path.exists(sniff_resources["CAPTUREFILE"]):
             os.remove(sniff_resources["CAPTUREFILE"])
-        self.req["uid"] = self.req["uid"].strip('\"')
 
-    def destroy_sniff(self):
-        self.sniff_widget.close()
-        self.sniff_widget = SniffForm(self)
+    def closeEvent(self, event):
+        self.sniff_widget.stop_sniff()
+        self.kill_chrome()
+        self.clean_up()
+        event.accept
 
 
 if __name__ == '__main__':

@@ -11,8 +11,10 @@ PySide2 = "^5.15.2"
 ifaddr = "^0.1.7"
 requests = "^2.25.1"
 QDarkStyle = "^3.0.2"
+appdirs = "^1.4.4"
 
 [tool.poetry.dev-dependencies]
+pyinstaller = "^4.3"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

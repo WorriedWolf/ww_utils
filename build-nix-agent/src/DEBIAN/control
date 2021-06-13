@@ -4,6 +4,7 @@ Section: custom
 Priority: optional
 Architecture: amd64
 Essential: no
-Installed-Size: 1024
+Installed-Size: 138100
+Depends: tshark
 Maintainer: worriedwolf.com
 Description: Capture and submit packet data and TLS session keys for research analysis
