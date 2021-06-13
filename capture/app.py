@@ -231,7 +231,6 @@ class SniffForm(QWidget):
             os.remove(sniff_resources["CAPTUREFILE"])
             self.submit_widget.setVisible(False)
             self.status_label.setText("ready")
-            raise("hello world")
         except Exception as e:
             self.raise_user_error("clean up failed!", traceback.format_exc())
 
@@ -257,7 +256,7 @@ class CaptureWindow(QWidget):
         self.setLayout(layout)
 
     def quit_chrome_message(self):
-        msgbox = QMessageBox(QMessageBox.Question, "Confirm chrome is close", "Have you shut down chrome?\n Please shut down chrome before continuing.")
+        msgbox = QMessageBox(QMessageBox.Question, "Can we shut down chrome?", "We will kill all chrome processes before we continue. ")
         msgbox.addButton(QMessageBox.Yes)
         msgbox.addButton(QMessageBox.No)
         msgbox.setDefaultButton(QMessageBox.No)
@@ -270,7 +269,7 @@ class CaptureWindow(QWidget):
         reply = self.quit_chrome_message()
         if reply == True:
             if os.name == "posix":
-                proc = Popen("kill -15 google-chrome")
+                proc = Popen("pkill -9 chrome", shell=True)
             else:
                 proc = Popen("taskkill /F /IM chrome.exe")
             proc.wait()
