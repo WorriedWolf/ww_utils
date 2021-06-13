@@ -43,12 +43,10 @@ class DigitalClock(QLCDNumber):
 
 
     def showTime(self):
-        if self.remaining_seconds >-1:
+        if self.remaining_seconds > -1:
             text = str(self.remaining_seconds)
             self.remaining_seconds -= 1
             self.display(text)
-        else:
-            self.reset()
 
     def reset(self):
             self.remaining_seconds = self.seconds
