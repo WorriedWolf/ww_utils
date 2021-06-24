@@ -5,6 +5,7 @@ agents, and more.
 
 - [WW Capture Agent](capture/docs/README.md)
 - [Linux Agent DEB Builder](build-nix-agent/README.md)
+- build for Windows: from capture folder, run `poetry shell` and `pyinstaller app.py --onefile`.
 
 ## License
 
