@@ -11,7 +11,7 @@ sudo apt install ./ww-capture-agent.deb
 
 ## Uninstall
 ```
-dpkg -r ww-capture-agent
+sudo dpkg -r ww-capture-agent
 ```
 
 ## Send installer to file server

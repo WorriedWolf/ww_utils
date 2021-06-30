@@ -2,7 +2,7 @@
 Name=WW Capture Agent
 GenericName=Network Security Research
 Comment=Network Security Research using packet capture and TLS decryption
-Exec=/opt/ww-capture-agent/app
+Exec=/opt/ww-capture-agent/app/app
 Terminal=false
 Icon=wolf
 Type=Application
